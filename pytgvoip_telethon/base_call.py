@@ -1,9 +1,5 @@
 import asyncio
 
-# import pyrogram
-# from pyrogram import errors
-# from pyrogram.raw import functions, types
-# from pyrogram.handlers import RawUpdateHandler
 import telethon
 from telethon import errors,events
 from telethon.tl import types, functions
@@ -52,17 +48,12 @@ class VoIPCallBase:
 
         if use_proxy_if_available and client._proxy:
             proxy = self.client._proxy
-            self.ctrl.set_proxy(proxy['hostname'], proxy['port'], proxy['username'], proxy['password'])
+            # self.ctrl.set_proxy(proxy['hostname'], proxy['port'], proxy['username'], proxy['password'])
+            self.ctrl.set_proxy(proxy['addr'], proxy['port'], '', '') # ip  port  username password
 
-        # 如何实现事件循环
-        # self._updates_handle = 
-        # self._updates_handle = self.client.loop.create_task(self.process_update)
-        # self._update_handler = RawUpdateHandler(self.process_update)
-        # self.client.add_handler(self._update_handler, -1)
         self.client.add_event_handler(self.process_update, events.raw.Raw)
 
     async def process_update(self, event):
-        logger.info('-------',event)
         update = event
         if not isinstance(update, types.UpdatePhoneCall):
             return
@@ -79,29 +70,19 @@ class VoIPCallBase:
             raise events.StopPropagation
 
     def on_call_started(self, func: callable) -> callable:  # well, the conversation has started
-        '''
-        '''
-        logger.debug("新增 call started 回调")
-        print('新增 call started 回调')
         self.call_started_handlers.append(func)
         return func
 
     def on_call_discarded(self, func: callable) -> callable:  # call was discarded, not necessarily started before
-        logger.debug("新增 call discarded 回调")
-        print('新增 call discarded 回调')
         self.call_discarded_handlers.append(func)
         return func
 
     def on_call_ended(self, func: callable) -> callable:  # call was discarded with non-busy reason
                                                           # (was started and then discarded?)
-        logger.debug("新增 on_call_ended 回调")
-        print('新增 on_call_ended 回调')
         self.call_ended_handlers.append(func)
         return func
 
     def on_call_state_changed(self, func: callable) -> callable:
-        logger.debug("新增 call_state_changed 回调")
-        print('新增 call_state_changed 回调')
         if callable(func):
             self.ctrl.call_state_changed_handlers.append(lambda state: (func(self, state),print('-------call_state_changed_handlers')))
         return func
@@ -187,7 +168,14 @@ class VoIPCallBase:
         self.call_ended()
 
     async def _initiate_encrypted_call(self) -> None:
+        ctrl = self.ctrl
         config = await self.client._sender.send(functions.help.GetConfigRequest())  # type: types.Config
+        if (not self.ctrl):
+            if not ctrl:
+                self.ctrl = VoIPController
+            else:
+                self.ctrl = ctrl
+                
         self.ctrl.set_config(config.call_packet_timeout_ms / 1000., config.call_connect_timeout_ms / 1000.,
                              DataSaving.NEVER, self.call.id)
         self.ctrl.set_encryption_key(self.auth_key_bytes, self.is_outgoing)
